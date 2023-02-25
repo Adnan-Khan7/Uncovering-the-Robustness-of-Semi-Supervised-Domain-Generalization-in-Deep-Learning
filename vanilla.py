@@ -10,7 +10,6 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data import random_split
-from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from mydata import *
 from helpers import *
@@ -25,11 +24,18 @@ logger = logging.getLogger(__name__)
 best_acc = 0
 best_acc_valid = 0
 
+def create_model(args):
+    if args.arch == 'resnet50':    
+        model = models.resnet50(weights='ResNet50_Weights.DEFAULT')
+        num_ftrs = model.fc.in_features
+        model.fc = nn.Linear(num_ftrs, 7) 
+    return model
+
 
 def main():
     parser = argparse.ArgumentParser(description='PyTorch FixMatch Training')
 
-    parser.add_argument('--num-workers', type=int, default=4,
+    parser.add_argument('--num-workers', type=int, default=8,
                         help='number of workers')
     parser.add_argument('--dataset', default='pacs', type=str,
                         choices=['pacs'],
@@ -42,11 +48,11 @@ def main():
     parser.add_argument("--expand-labels", action="store_true",
                         help="expand labels to fit eval steps")
 
-    parser.add_argument('--arch', default='resnet18', type=str,
-                        choices=['resnet18'])
+    parser.add_argument('--arch', default='resnet50', type=str,
+                        choices=['resnet18', 'resnet50'])
     # Epochs = total steps / eval steps
     #35840
-    parser.add_argument('--total-steps', default=512*10, type=int,
+    parser.add_argument('--total-steps', default=1024*20, type=int,
                         help='number of total steps to run')
     #896
     parser.add_argument('--eval-step', default=512, type=int,
@@ -55,7 +61,7 @@ def main():
     parser.add_argument('--start-epoch', default=0, type=int,
                         help='manual epoch number (useful on restarts)')
 
-    parser.add_argument('--batch-size', default=64, type=int,
+    parser.add_argument('--batch-size', default=24, type=int,
                         help='train batchsize')
     parser.add_argument('--lr', '--learning-rate', default=0.03, type=float,
                         help='initial learning rate')
@@ -107,16 +113,9 @@ def main():
     args = parser.parse_args()
     global best_acc, best_acc_valid
     
-    logging.basicConfig(filename=args.out + '/logs_resnet18.log', level=logging.INFO,
+    logging.basicConfig(filename=args.out + '/logs_resnet50.log', level=logging.INFO,
                     format='%(asctime)s:%(levelname)s:%(message)s')
         
-        
-    def create_model(args):
-        if args.arch == 'resnet18':    
-            model = models.resnet18(weights='ResNet18_Weights.DEFAULT')
-            num_ftrs = model.fc.in_features
-            model.fc = nn.Linear(num_ftrs, 7) 
-        return model
 
     device = torch.device('cuda')
     args.device = device
@@ -169,8 +168,6 @@ def main():
 
     optimizer = optim.SGD(grouped_parameters, lr=args.lr,
                          momentum=0.9, nesterov=args.nesterov)
-
-    #optimizer = optim.Adam(grouped_parameters, lr = args.lr, betas=(0.9,0.999))
 
     args.epochs = math.ceil(args.total_steps / args.eval_step)
     scheduler = get_cosine_schedule_with_warmup(
@@ -264,17 +261,6 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader, val_loa
             logits_x = logits[:batch_size]
             logits_u_w, logits_u_s = logits[batch_size:].chunk(2)
             
-            # distillation_loss = F.kl_div(
-            #     F.log_softmax(logits_u_s / 3, dim=1),
-            #     #We provide the teacher's targets in log probability because we use log_target=True 
-            #     #(as recommended in pytorch https://github.com/pytorch/pytorch/blob/9324181d0ac7b4f7949a574dbc3e8be30abe7041/torch/nn/functional.py#L2719)
-            #     #but it is possible to give just the probabilities and set log_target=False. In our experiments we tried both.
-            #     F.log_softmax( logits_u_w/ 3, dim=1),
-            #     reduction='sum',
-            #     log_target=True
-            # ) * (3 * 3) / logits_u_s.numel()
-            
-            
             del logits
             
             Lx = F.cross_entropy(logits_x, targets_x, reduction='mean')
@@ -283,30 +269,30 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader, val_loa
             
             #change mask for standard deviation based PL selection
             
-            mask = max_probs.ge(args.threshold).float()
+            mask_p = max_probs.ge(args.threshold).float()
           
-            # var = get_monte_carlo_predictions(inputs_u_w,targets_u,
-            #                     10,
-            #                     model,
-            #                     7,
-            #                     len(inputs_u_w))
+            var = get_monte_carlo_predictions(inputs_u_w,targets_u,
+                                10,
+                                model,
+                                7,
+                                len(inputs_u_w))
 
-            # model.train()
-            # # variance
-            # var = var.to(device='cuda')
-            # row_idxs = np.arange(var.shape[0])
-            # col_idxs = targets_u
-            # var_min = var[row_idxs, col_idxs]
-            # mask_var = var_min.le(0.7).float()
-            # mask = mask_p*mask_var
+            model.train()
+            # variance
+            var = var.to(device='cuda')
+            row_idxs = np.arange(var.shape[0])
+            col_idxs = targets_u
+            var_min = var[row_idxs, col_idxs]
+            mask_var = var_min.le(0.7).float()
+            mask = mask_p*mask_var
             
             
             Lu = (F.cross_entropy(logits_u_s, targets_u,
                                   reduction='none') * mask).mean()
 
             loss = Lx + args.lambda_u * Lu #+ distillation_loss
-            # #######
-            # del var, var_min
+            #######
+            del var, var_min
             
             if args.amp:
                 with amp.scale_loss(loss, optimizer) as scaled_loss:
@@ -356,37 +342,34 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader, val_loa
            logger.info("Number of Pseudo Labels: {}\n".format(total))
            logger.info("Pseudo Labels Accuracy: {}".format(pl_accuracy*100))
 
-        def create_model(args):
-            if args.arch == 'resnet18':    
-                model = models.resnet18(weights='ResNet18_Weights.DEFAULT')
-                num_ftrs = model.fc.in_features
-                model.fc = nn.Linear(num_ftrs, 7) 
-            return model
 
+        # if args.use_ema:
+        #     test_model = ema_model.ema
+        # else:
+        #     test_model = model
 
-
-
-        if args.use_ema:
+        ###########################
+        if epoch == 0:
             test_model = ema_model.ema
-            # if epoch != 0:
-            #     test_modelC = test_model.state_dict()
-            #     #/l/users/adnan.khan/logs/misc/
-            #     modelA_ck = torch.load(args.out + '/model_best_valid.pth.tar')
-            #     modelB_ck = torch.load(args.out + '/checkpoint.pth.tar')
-            #     sdA = modelA_ck['ema_state_dict']
-            #     sdB = modelB_ck['ema_state_dict']
-
-            #     # Average all parameters
-            #     for key in sdA:
-            #         sdB[key] = (sdB[key] + sdA[key] ) / 2
-            #     #re-create model
-            #     test_model = create_model(args)
-            #     test_model.to(args.device)
-            #     test_model.load_state_dict(sdB)
-            #     print("Using averaged model weights")
-
         else:
-            test_model = model
+            test_model = create_model(args)
+            # Load the state dicts of the three models
+            best_model_state_dict = torch.load(args.out + '/model_best_valid.pth.tar')['state_dict']
+            last_model_state_dict = torch.load(args.out + '/checkpoint.pth.tar')['state_dict']
+            ema_model_state_dict = ema_model.ema.state_dict()
+            # Combine the state dicts into a single dictionary
+            combined_state_dict = {k: (best_model_state_dict[k] + last_model_state_dict[k] + ema_model_state_dict[k]) / 3
+                                   for k in best_model_state_dict.keys() & last_model_state_dict.keys() & ema_model_state_dict.keys()}
+
+
+            # Load the combined state dict into the new model
+            test_model.load_state_dict(combined_state_dict)
+            test_model.cuda()
+            print("Using Averaged Models")
+
+
+            ##################################
+
             
         valid_loss, valid_acc = valid(args, val_loader, test_model, epoch)
         test_loss, test_acc = test(args, test_loader, test_model, epoch)
@@ -450,26 +433,6 @@ def test(args, test_loader, model, epoch):
             targets = targets.to(args.device)
             outputs = model(inputs)
             loss = F.cross_entropy(outputs, targets)
-
-            # ##
-            # # import pdb 
-            # # pdb.set_trace()
-            
-            # outputs_label = torch.argmax(outputs, dim=1)
-            # correct = torch.eq(targets, outputs_label)
-            # correct = torch.sum(correct)
-            # assert len(targets) == len(outputs_label)
-            # total = len(targets)
-            
-            # if correct > 0:
-            #    acc_tst = correct / total
-            #    #print("pseudo labels accuracy: ", pl_accuracy.item()*100)
-            #    import pdb 
-            #    pdb.set_trace()
-            #    logger.info("Accuracy: {}".format(acc_tst*100))
-            #    logger.info("Number correct examples: {}".format(correct))
-            #    logger.info("Number of total examples: {}".format(total))
-            # ##
 
             prec1, prec5 = accuracy(outputs, targets, topk=(1, 5))
             losses.update(loss.item(), inputs.shape[0])

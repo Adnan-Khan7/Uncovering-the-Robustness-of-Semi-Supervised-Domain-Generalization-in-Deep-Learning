@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data import random_split
 from tqdm import tqdm
-from mydata import *
+from data import *
 from helpers import *
 from utils import AverageMeter, accuracy
 
@@ -24,11 +24,29 @@ logger = logging.getLogger(__name__)
 best_acc = 0
 best_acc_valid = 0
 
-def create_model(args):
-    if args.arch == 'resnet50':    
+def get_num_classes(dataset_name):
+    if dataset_name == 'pacs':
+        return 7
+    elif dataset_name == 'vlcs':
+        return 5
+    elif dataset_name == 'office_home':
+        return 65
+    else:
+        raise ValueError('Invalid dataset name: {}'.format(dataset_name))
+
+
+def create_model(args, dataset_name):
+    if args.arch == 'resnet18':    
+        model = models.resnet18(weights='ResNet18_Weights.DEFAULT')
+    elif args.arch == 'resnet50':
         model = models.resnet50(weights='ResNet50_Weights.DEFAULT')
-        num_ftrs = model.fc.in_features
-        model.fc = nn.Linear(num_ftrs, 7) 
+    
+    num_ftrs = model.fc.in_features
+    num_classes = get_num_classes(args.dataset_name)
+    model.fc = nn.Linear(num_ftrs, num_classes)
+    print("Dataset: ", args.dataset_name) 
+    print("Number of classes: ", num_classes)
+    print("Model Architecture: ", args.arch)
     return model
 
 
@@ -37,8 +55,8 @@ def main():
 
     parser.add_argument('--num-workers', type=int, default=8,
                         help='number of workers')
-    parser.add_argument('--dataset', default='pacs', type=str,
-                        choices=['pacs'],
+    parser.add_argument('--dataset_name', default='pacs', type=str,
+                        choices=['pacs', 'vlcs','office_home'],
                         help='dataset name')
 
     # number of labeled training examples
@@ -112,8 +130,13 @@ def main():
 
     args = parser.parse_args()
     global best_acc, best_acc_valid
+
+    if args.arch == 'resnet50':
+        filename = 'logs_resnet50.log'
+    else:
+        filename = 'logs_resnet18.log'
     
-    logging.basicConfig(filename=args.out + '/logs_resnet50.log', level=logging.INFO,
+    logging.basicConfig(filename=args.out + '/' + filename, level=logging.INFO,
                     format='%(asctime)s:%(levelname)s:%(message)s')
         
 
@@ -123,7 +146,7 @@ def main():
     logger.info(dict(args._get_kwargs()))
 
     # Forming Data Loaders
-    labeled_dataset, unlabeled_dataset, validation_dataset, test_dataset = train_set, un_dataset, v_dataset, test_set    
+    labeled_dataset, unlabeled_dataset, validation_dataset, test_dataset =  load_dataset(args.dataset_name)   
     train_sampler = RandomSampler 
 
     # train and unlabeled loaders
@@ -151,12 +174,12 @@ def main():
     
     val_loader = DataLoader(
         validation_dataset,
-        sampler=SequentialSampler(v_dataset),
+        sampler=SequentialSampler(validation_dataset),
         batch_size=args.batch_size,
         num_workers=args.num_workers
         )
     # create model and move to device
-    model = create_model(args)
+    model = create_model(args, args.dataset_name)
     model.to(args.device)
 
     no_decay = ['bias', 'bn']
@@ -201,7 +224,7 @@ def main():
             model, optimizer, opt_level=args.opt_level)
 
     logger.info("***** Running training *****")
-    logger.info(f"  Task = {args.dataset}@{args.num_labeled}")
+    logger.info(f"  Task = {args.dataset_name}@{args.num_labeled}")
     logger.info(f"  Num Epochs = {args.epochs}")
     logger.info(f"  Batch size per GPU = {args.batch_size}")
     logger.info(
@@ -239,16 +262,16 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader, val_loa
   
         for batch_idx in range(args.eval_step):
             try:
-                inputs_x, targets_x = labeled_iter.next()
+                inputs_x, targets_x = next(labeled_iter)
             except:
                 labeled_iter = iter(labeled_trainloader)
-                inputs_x, targets_x = labeled_iter.next()
+                inputs_x, targets_x = next(labeled_iter)
 
             try:
-                (inputs_u_w, inputs_u_s), targets_unlabeled = unlabeled_iter.next()
+                (inputs_u_w, inputs_u_s), targets_unlabeled = next(unlabeled_iter)
             except:
                 unlabeled_iter = iter(unlabeled_trainloader)
-                (inputs_u_w, inputs_u_s), targets_unlabeled = unlabeled_iter.next()
+                (inputs_u_w, inputs_u_s), targets_unlabeled = next(unlabeled_iter)
 
             data_time.update(time.time() - end)
             batch_size = inputs_x.shape[0]
@@ -269,30 +292,30 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader, val_loa
             
             #change mask for standard deviation based PL selection
             
-            mask_p = max_probs.ge(args.threshold).float()
-          
-            var = get_monte_carlo_predictions(inputs_u_w,targets_u,
-                                10,
-                                model,
-                                7,
-                                len(inputs_u_w))
+            mask = max_probs.ge(args.threshold).float()
 
-            model.train()
-            # variance
-            var = var.to(device='cuda')
-            row_idxs = np.arange(var.shape[0])
-            col_idxs = targets_u
-            var_min = var[row_idxs, col_idxs]
-            mask_var = var_min.le(0.7).float()
-            mask = mask_p*mask_var
+    ########################### Uncertainity Estimation ################################      
+            # var = get_monte_carlo_predictions(inputs_u_w,targets_u,
+            #                     10,
+            #                     model,
+            #                     get_num_classes(args.dataset_name),
+            #                     len(inputs_u_w))
+
+            # model.train()
+            # # variance
+            # var = var.to(device='cuda')
+            # row_idxs = np.arange(var.shape[0])
+            # col_idxs = targets_u
+            # var_min = var[row_idxs, col_idxs]
+            # mask_var = var_min.le(0.7).float()
+            # mask = mask_p*mask_var
+            # del var, var_min
             
-            
+    ########################### Uncertainity Estimation ################################     
             Lu = (F.cross_entropy(logits_u_s, targets_u,
                                   reduction='none') * mask).mean()
-
-            loss = Lx + args.lambda_u * Lu #+ distillation_loss
-            #######
-            del var, var_min
+            loss = Lx + args.lambda_u * Lu 
+            
             
             if args.amp:
                 with amp.scale_loss(loss, optimizer) as scaled_loss:
@@ -343,29 +366,29 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader, val_loa
            logger.info("Pseudo Labels Accuracy: {}".format(pl_accuracy*100))
 
 
-        # if args.use_ema:
-        #     test_model = ema_model.ema
-        # else:
-        #     test_model = model
-
-        ###########################
-        if epoch == 0:
+        if args.use_ema:
             test_model = ema_model.ema
         else:
-            test_model = create_model(args)
-            # Load the state dicts of the three models
-            best_model_state_dict = torch.load(args.out + '/model_best_valid.pth.tar')['state_dict']
-            last_model_state_dict = torch.load(args.out + '/checkpoint.pth.tar')['state_dict']
-            ema_model_state_dict = ema_model.ema.state_dict()
-            # Combine the state dicts into a single dictionary
-            combined_state_dict = {k: (best_model_state_dict[k] + last_model_state_dict[k] + ema_model_state_dict[k]) / 3
-                                   for k in best_model_state_dict.keys() & last_model_state_dict.keys() & ema_model_state_dict.keys()}
+            test_model = model
+
+        ###########################
+        # if epoch == 0:
+        #     test_model = ema_model.ema
+        # else:
+        #     test_model = create_model(args, args.dataset_name)
+        #     # Load the state dicts of the three models
+        #     best_model_state_dict = torch.load(args.out + '/model_best_valid.pth.tar')['state_dict']
+        #     last_model_state_dict = torch.load(args.out + '/checkpoint.pth.tar')['state_dict']
+        #     ema_model_state_dict = ema_model.ema.state_dict()
+        #     # Combine the state dicts into a single dictionary
+        #     combined_state_dict = {k: (best_model_state_dict[k] + last_model_state_dict[k] + ema_model_state_dict[k]) / 3
+        #                            for k in best_model_state_dict.keys() & last_model_state_dict.keys() & ema_model_state_dict.keys()}
 
 
-            # Load the combined state dict into the new model
-            test_model.load_state_dict(combined_state_dict)
-            test_model.cuda()
-            print("Using Averaged Models")
+        #     # Load the combined state dict into the new model
+        #     test_model.load_state_dict(combined_state_dict)
+        #     test_model.cuda()
+        #     print("Using Averaged Models")
 
 
             ##################################

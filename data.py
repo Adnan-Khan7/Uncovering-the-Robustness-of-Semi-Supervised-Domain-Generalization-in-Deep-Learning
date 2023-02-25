@@ -66,10 +66,21 @@ class TransformFixMatch(object):
         strong = self.strong(x)
         return self.normalize(weak), self.normalize(strong)
 
+#PACS
 # art, cartoon, photo, sketch
+# python train.py --expand-labels --dataset_name pacs --arch resnet50 --out /l/users/adnan.khan/logs/pacs/labels_10_seed3/art/resnet50/vanilla
 
-# python train2.py --expand-labels --out /l/users/adnan.khan/logs/misc
-DATA = "/l/users/adnan.khan/pacs/labels_10/pacs_ssdg/seed1/art/"
+#VLCS
+#Caltech101, LabelMe, SUN09, VOC2007
+#python train.py --expand-labels --dataset_name vlcs --arch resnet50 --out /l/users/maha.agro/logs/vlcs/seed1/Caltech101
+
+# OfficeHome
+#Art, Clipart, Product, Real_World
+#python train.py --expand-labels --dataset_name office_home --arch resnet50 --out /l/users/ariana.venegas/logs/seed1/Product/vanilla
+#avg, avg_var, var
+
+
+DATA = "/l/users/adnan.khan/pacs/labels_10/pacs_ssdg/seed3/art/"
 DATA_TRAIN_SET = (DATA + "train")
 DATA_UNLABELED_SET = (DATA + "unlabeled")
 DATA_TEST_SET = (DATA + "test")
@@ -109,5 +120,5 @@ def load_dataset(dataset_name):
     un_dataset = torch.utils.data.Subset(unlabeled_dataset,unlabeled_idx)
     v_dataset = torch.utils.data.Subset(val_dataset, valid_idx)
 
-    print("Size of unlabeled data: ",len(unlabeled_dataset))
+    print("Size of unlabeled data: ",len(un_dataset))
     return train_set, un_dataset, v_dataset, test_set 

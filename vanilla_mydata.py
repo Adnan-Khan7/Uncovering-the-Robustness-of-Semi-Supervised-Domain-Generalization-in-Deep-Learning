@@ -19,8 +19,8 @@ torch.backends.cudnn.deterministic = True
 
 # art, cartoon, photo, sketch
 
-# python train.py --expand-labels --out /l/users/adnan.khan/logs/pacs/labels_10_seed3/sketch/resnet50/avg_var
-DATA = "/l/users/adnan.khan/pacs/labels_10/pacs_ssdg/seed3/sketch/"
+# python train.py --expand-labels --out /l/users/adnan.khan/logs/misc
+DATA = "/l/users/adnan.khan/pacs/labels_10/pacs_ssdg/seed1/art/"
 
 DATA_TRAIN_SET = (DATA + "train")
 DATA_UNLABELED_SET = (DATA + "unlabeled")
