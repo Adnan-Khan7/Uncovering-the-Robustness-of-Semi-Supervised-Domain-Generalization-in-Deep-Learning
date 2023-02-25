@@ -66,8 +66,10 @@ class TransformFixMatch(object):
         strong = self.strong(x)
         return self.normalize(weak), self.normalize(strong)
 
+# art, cartoon, photo, sketch
 
-DATA = "/home/maha.agro/FixMatch-pytorch/dataset/seed2/VOC2007/"
+# python train2.py --expand-labels --out /l/users/adnan.khan/logs/misc
+DATA = "/l/users/adnan.khan/pacs/labels_10/pacs_ssdg/seed1/art/"
 DATA_TRAIN_SET = (DATA + "train")
 DATA_UNLABELED_SET = (DATA + "unlabeled")
 DATA_TEST_SET = (DATA + "test")

@@ -129,9 +129,9 @@ def main():
     global best_acc, best_acc_valid
 
     if args.arch == 'resnet50':
-    filename = 'logs_resnet50.log'
+        filename = 'logs_resnet50.log'
     else:
-    filename = 'logs_resnet18.log'
+        filename = 'logs_resnet18.log'
     
     logging.basicConfig(filename=args.out + '/' + filename, level=logging.INFO,
                     format='%(asctime)s:%(levelname)s:%(message)s')
@@ -171,12 +171,12 @@ def main():
     
     val_loader = DataLoader(
         validation_dataset,
-        sampler=SequentialSampler(v_dataset),
+        sampler=SequentialSampler(validation_dataset),
         batch_size=args.batch_size,
         num_workers=args.num_workers
         )
     # create model and move to device
-    model = create_model(args)
+    model = create_model(args, args.dataset_name)
     model.to(args.device)
 
     no_decay = ['bias', 'bn']
@@ -221,7 +221,7 @@ def main():
             model, optimizer, opt_level=args.opt_level)
 
     logger.info("***** Running training *****")
-    logger.info(f"  Task = {args.dataset}@{args.num_labeled}")
+    logger.info(f"  Task = {args.dataset_name}@{args.num_labeled}")
     logger.info(f"  Num Epochs = {args.epochs}")
     logger.info(f"  Batch size per GPU = {args.batch_size}")
     logger.info(
@@ -294,7 +294,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader, val_loa
             var = get_monte_carlo_predictions(inputs_u_w,targets_u,
                                 10,
                                 model,
-                                num_classes,
+                                get_num_classes(args.dataset_name),
                                 len(inputs_u_w))
 
             model.train()
@@ -372,7 +372,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader, val_loa
         if epoch == 0:
             test_model = ema_model.ema
         else:
-            test_model = create_model(args)
+            test_model = create_model(args, args.dataset_name)
             # Load the state dicts of the three models
             best_model_state_dict = torch.load(args.out + '/model_best_valid.pth.tar')['state_dict']
             last_model_state_dict = torch.load(args.out + '/checkpoint.pth.tar')['state_dict']
