@@ -307,7 +307,7 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader, val_loa
             row_idxs = np.arange(var.shape[0])
             col_idxs = targets_u
             var_min = var[row_idxs, col_idxs]
-            mask_var = var_min.ge(0.6).float()
+            mask_var = var_min.ge(0.4).float()
             mask = mask_p*mask_var
             del var, var_min
             

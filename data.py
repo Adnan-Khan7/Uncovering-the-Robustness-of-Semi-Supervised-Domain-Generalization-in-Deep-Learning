@@ -72,15 +72,21 @@ class TransformFixMatch(object):
 
 #VLCS
 #Caltech101, LabelMe, SUN09, VOC2007
-#python train.py --expand-labels --dataset_name vlcs --arch resnet50 --out /l/users/maha.agro/logs/vlcs/seed1/Caltech101
+#python train.py --expand-labels --dataset_name vlcs --arch resnet50 --out /l/users/maha.agro/logs/vlcs/seed1/LabelMe/exps/avg_var_04
 
 # OfficeHome
 #Art, Clipart, Product, Real_World
 #python train.py --expand-labels --dataset_name office_home --arch resnet50 --out /l/users/ariana.venegas/logs/seed1/Product/vanilla
 #avg, avg_var, var
 
+#PACS
+# DATA = "/l/users/adnan.khan/pacs/labels_10/pacs_ssdg/seed1/art/"
 
-DATA = "/l/users/adnan.khan/pacs/labels_10/pacs_ssdg/seed1/art/"
+#VLCS
+DATA = "/l/users/maha.agro/data/ssdg_vlcs/labels_10/seed1/LabelMe/"
+
+#OfficeHome
+
 DATA_TRAIN_SET = (DATA + "train")
 DATA_UNLABELED_SET = (DATA + "unlabeled")
 DATA_TEST_SET = (DATA + "test")
