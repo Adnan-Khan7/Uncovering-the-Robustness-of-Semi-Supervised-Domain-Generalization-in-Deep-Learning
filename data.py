@@ -86,6 +86,7 @@ class TransformFixMatch(object):
 DATA = "/l/users/maha.agro/data/ssdg_vlcs/labels_10/seed1/LabelMe/"
 
 #OfficeHome
+#Data
 
 DATA_TRAIN_SET = (DATA + "train")
 DATA_UNLABELED_SET = (DATA + "unlabeled")
