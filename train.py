@@ -70,7 +70,7 @@ def main():
                         choices=['resnet18', 'resnet50'])
     # Epochs = total steps / eval steps
     #35840
-    parser.add_argument('--total-steps', default=1024*20, type=int,
+    parser.add_argument('--total-steps', default=512*40, type=int,
                         help='number of total steps to run')
     #896
     parser.add_argument('--eval-step', default=512, type=int,
@@ -292,24 +292,24 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader, val_loa
             
             #change mask for standard deviation based PL selection
             
-            mask = max_probs.ge(args.threshold).float()
+            mask_p = max_probs.ge(args.threshold).float()
 
     ########################### Uncertainity Estimation ################################      
-            # var = get_monte_carlo_predictions(inputs_u_w,targets_u,
-            #                     10,
-            #                     model,
-            #                     get_num_classes(args.dataset_name),
-            #                     len(inputs_u_w))
+            var = get_monte_carlo_predictions(inputs_u_w,targets_u,
+                                10,
+                                model,
+                                get_num_classes(args.dataset_name),
+                                len(inputs_u_w))
 
-            # model.train()
-            # # variance
-            # var = var.to(device='cuda')
-            # row_idxs = np.arange(var.shape[0])
-            # col_idxs = targets_u
-            # var_min = var[row_idxs, col_idxs]
-            # mask_var = var_min.le(0.7).float()
-            # mask = mask_p*mask_var
-            # del var, var_min
+            model.train()
+            # variance
+            var = var.to(device='cuda')
+            row_idxs = np.arange(var.shape[0])
+            col_idxs = targets_u
+            var_min = var[row_idxs, col_idxs]
+            mask_var = var_min.ge(0.6).float()
+            mask = mask_p*mask_var
+            del var, var_min
             
     ########################### Uncertainity Estimation ################################     
             Lu = (F.cross_entropy(logits_u_s, targets_u,
@@ -366,29 +366,29 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader, val_loa
            logger.info("Pseudo Labels Accuracy: {}".format(pl_accuracy*100))
 
 
-        if args.use_ema:
-            test_model = ema_model.ema
-        else:
-            test_model = model
-
-        ###########################
-        # if epoch == 0:
+        # if args.use_ema:
         #     test_model = ema_model.ema
         # else:
-        #     test_model = create_model(args, args.dataset_name)
-        #     # Load the state dicts of the three models
-        #     best_model_state_dict = torch.load(args.out + '/model_best_valid.pth.tar')['state_dict']
-        #     last_model_state_dict = torch.load(args.out + '/checkpoint.pth.tar')['state_dict']
-        #     ema_model_state_dict = ema_model.ema.state_dict()
-        #     # Combine the state dicts into a single dictionary
-        #     combined_state_dict = {k: (best_model_state_dict[k] + last_model_state_dict[k] + ema_model_state_dict[k]) / 3
-        #                            for k in best_model_state_dict.keys() & last_model_state_dict.keys() & ema_model_state_dict.keys()}
+        #     test_model = model
+
+        ###########################
+        if epoch == 0:
+            test_model = ema_model.ema
+        else:
+            test_model = create_model(args, args.dataset_name)
+            # Load the state dicts of the three models
+            best_model_state_dict = torch.load(args.out + '/model_best_valid.pth.tar')['state_dict']
+            last_model_state_dict = torch.load(args.out + '/checkpoint.pth.tar')['state_dict']
+            ema_model_state_dict = ema_model.ema.state_dict()
+            # Combine the state dicts into a single dictionary
+            combined_state_dict = {k: (best_model_state_dict[k] + last_model_state_dict[k] + ema_model_state_dict[k]) / 3
+                                   for k in best_model_state_dict.keys() & last_model_state_dict.keys() & ema_model_state_dict.keys()}
 
 
-        #     # Load the combined state dict into the new model
-        #     test_model.load_state_dict(combined_state_dict)
-        #     test_model.cuda()
-        #     print("Using Averaged Models")
+            # Load the combined state dict into the new model
+            test_model.load_state_dict(combined_state_dict)
+            test_model.cuda()
+            print("Using Averaged Models")
 
 
             ##################################

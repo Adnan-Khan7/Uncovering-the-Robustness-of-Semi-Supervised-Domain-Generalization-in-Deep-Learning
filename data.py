@@ -68,7 +68,7 @@ class TransformFixMatch(object):
 
 #PACS
 # art, cartoon, photo, sketch
-# python train.py --expand-labels --dataset_name pacs --arch resnet50 --out /l/users/adnan.khan/logs/pacs/labels_10_seed3/art/resnet50/vanilla
+# python train.py --expand-labels --dataset_name pacs --arch resnet50 --out /l/users/adnan.khan/logs/pacs/labels_10_seed1/art/resnet50/exps/avg_var_06
 
 #VLCS
 #Caltech101, LabelMe, SUN09, VOC2007
@@ -80,7 +80,7 @@ class TransformFixMatch(object):
 #avg, avg_var, var
 
 
-DATA = "/l/users/adnan.khan/pacs/labels_10/pacs_ssdg/seed3/art/"
+DATA = "/l/users/adnan.khan/pacs/labels_10/pacs_ssdg/seed1/art/"
 DATA_TRAIN_SET = (DATA + "train")
 DATA_UNLABELED_SET = (DATA + "unlabeled")
 DATA_TEST_SET = (DATA + "test")
