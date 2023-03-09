@@ -66,11 +66,11 @@ def main():
     parser.add_argument("--expand-labels", action="store_true",
                         help="expand labels to fit eval steps")
 
-    parser.add_argument('--arch', default='resnet50', type=str,
+    parser.add_argument('--arch', default='resnet18', type=str,
                         choices=['resnet18', 'resnet50'])
     # Epochs = total steps / eval steps
     #35840
-    parser.add_argument('--total-steps', default=512*40, type=int,
+    parser.add_argument('--total-steps', default=512*20, type=int,
                         help='number of total steps to run')
     #896
     parser.add_argument('--eval-step', default=512, type=int,
@@ -79,7 +79,7 @@ def main():
     parser.add_argument('--start-epoch', default=0, type=int,
                         help='manual epoch number (useful on restarts)')
 
-    parser.add_argument('--batch-size', default=24, type=int,
+    parser.add_argument('--batch-size', default=64, type=int,
                         help='train batchsize')
     parser.add_argument('--lr', '--learning-rate', default=0.03, type=float,
                         help='initial learning rate')
@@ -100,7 +100,7 @@ def main():
     parser.add_argument('--ema-decay', default=0.999, type=float,
                         help='EMA decay rate')
     ##Unlabeled Batch size
-    parser.add_argument('--mu', default=5, type=int,
+    parser.add_argument('--mu', default=7, type=int,
                         help='coefficient of unlabeled batch size')
     ## Loss Coefficient
     parser.add_argument('--lambda-u', default=1, type=float,
@@ -292,24 +292,24 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader, val_loa
             
             #change mask for standard deviation based PL selection
             
-            mask_p = max_probs.ge(args.threshold).float()
+            mask = max_probs.ge(args.threshold).float()
 
     ########################### Uncertainity Estimation ################################      
-            var = get_monte_carlo_predictions(inputs_u_w,targets_u,
-                                10,
-                                model,
-                                get_num_classes(args.dataset_name),
-                                len(inputs_u_w))
+            # var = get_monte_carlo_predictions(inputs_u_w,targets_u,
+            #                     10,
+            #                     model,
+            #                     get_num_classes(args.dataset_name),
+            #                     len(inputs_u_w))
 
-            model.train()
-            # variance
-            var = var.to(device='cuda')
-            row_idxs = np.arange(var.shape[0])
-            col_idxs = targets_u
-            var_min = var[row_idxs, col_idxs]
-            mask_var = var_min.ge(0.4).float()
-            mask = mask_p*mask_var
-            del var, var_min
+            # model.train()
+            # # variance
+            # var = var.to(device='cuda')
+            # row_idxs = np.arange(var.shape[0])
+            # col_idxs = targets_u
+            # var_min = var[row_idxs, col_idxs]
+            # mask_var = var_min.ge(0.2).float()
+            # mask = mask_p*mask_var
+            # del var, var_min
             
     ########################### Uncertainity Estimation ################################     
             Lu = (F.cross_entropy(logits_u_s, targets_u,
@@ -366,29 +366,29 @@ def train(args, labeled_trainloader, unlabeled_trainloader, test_loader, val_loa
            logger.info("Pseudo Labels Accuracy: {}".format(pl_accuracy*100))
 
 
-        # if args.use_ema:
-        #     test_model = ema_model.ema
-        # else:
-        #     test_model = model
-
-        ###########################
-        if epoch == 0:
+        if args.use_ema:
             test_model = ema_model.ema
         else:
-            test_model = create_model(args, args.dataset_name)
-            # Load the state dicts of the three models
-            best_model_state_dict = torch.load(args.out + '/model_best_valid.pth.tar')['state_dict']
-            last_model_state_dict = torch.load(args.out + '/checkpoint.pth.tar')['state_dict']
-            ema_model_state_dict = ema_model.ema.state_dict()
-            # Combine the state dicts into a single dictionary
-            combined_state_dict = {k: (best_model_state_dict[k] + last_model_state_dict[k] + ema_model_state_dict[k]) / 3
-                                   for k in best_model_state_dict.keys() & last_model_state_dict.keys() & ema_model_state_dict.keys()}
+            test_model = model
+
+        ###########################
+        # if epoch == 0:
+        #     test_model = ema_model.ema
+        # else:
+        #     test_model = create_model(args, args.dataset_name)
+        #     # Load the state dicts of the three models
+        #     best_model_state_dict = torch.load(args.out + '/model_best_valid.pth.tar')['state_dict']
+        #     last_model_state_dict = torch.load(args.out + '/checkpoint.pth.tar')['state_dict']
+        #     ema_model_state_dict = ema_model.ema.state_dict()
+        #     # Combine the state dicts into a single dictionary
+        #     combined_state_dict = {k: (best_model_state_dict[k] + last_model_state_dict[k] + ema_model_state_dict[k]) / 3
+        #                            for k in best_model_state_dict.keys() & last_model_state_dict.keys() & ema_model_state_dict.keys()}
 
 
-            # Load the combined state dict into the new model
-            test_model.load_state_dict(combined_state_dict)
-            test_model.cuda()
-            print("Using Averaged Models")
+        #     # Load the combined state dict into the new model
+        #     test_model.load_state_dict(combined_state_dict)
+        #     test_model.cuda()
+        #     print("Using Averaged Models")
 
 
             ##################################

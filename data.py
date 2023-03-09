@@ -68,25 +68,27 @@ class TransformFixMatch(object):
 
 #PACS
 # art, cartoon, photo, sketch
-# python train.py --expand-labels --dataset_name pacs --arch resnet50 --out /l/users/adnan.khan/logs/pacs/labels_10_seed1/art/resnet50/exps/avg_var_06
-
-#VLCS
-#Caltech101, LabelMe, SUN09, VOC2007
-#python train.py --expand-labels --dataset_name vlcs --arch resnet50 --out /l/users/maha.agro/logs/vlcs/seed1/LabelMe/exps/avg_var_04
-
-# OfficeHome
-#Art, Clipart, Product, Real_World
-#python train.py --expand-labels --dataset_name office_home --arch resnet50 --out /l/users/ariana.venegas/logs/seed1/Art/resnet50/exps/avg_var_04
-#avg, avg_var, var
+# python train.py --expand-labels --dataset_name pacs --arch resnet18 --out /l/users/adnan.khan/logs/pacs/labels_10_seed1/art/resnet10/vanilla
 
 #PACS
-# DATA = "/l/users/adnan.khan/pacs/labels_10/pacs_ssdg/seed1/art/"
+DATA = "/l/users/adnan.khan/pacs/labels_10/pacs_ssdg/seed1/art/"
+
+
+#######################################################################
 
 # #VLCS
 # DATA = "/l/users/maha.agro/data/ssdg_vlcs/labels_10/seed1/LabelMe/"
+# #OfficeHome
+# DATA = "/l/users/ariana.venegas/dataset/ssdg_OH/labels_10/seed1/Art/"
 
-#OfficeHome
-DATA = "/l/users/ariana.venegas/dataset/ssdg_OH/labels_10/seed1/Art/"
+#VLCS
+#Caltech101, LabelMe, SUN09, VOC2007
+#python train.py --expand-labels --dataset_name vlcs --arch resnet18 --out /l/users/maha.agro/logs/vlcs/seed1/ResNet18/Caltech101/vanilla
+
+# OfficeHome
+#Art, Clipart, Product, Real_World
+#python train.py --expand-labels --dataset_name office_home --arch resnet18  --out /l/users/ariana.venegas/logs/seed1/Art/resnet18/vanilla
+#avg, avg_var, var
 
 DATA_TRAIN_SET = (DATA + "train")
 DATA_UNLABELED_SET = (DATA + "unlabeled")
